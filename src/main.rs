@@ -2,17 +2,36 @@ use chrono::{Datelike, Duration, Timelike};
 use soup::{prelude::*, QueryBuilderExt, Soup};
 mod creds;
 
+/**
+* How this works:
+* This Webhook bot is split into 3 steps:
+* 1. Login into Nesa
+*   1.1 Getting the login hash required for the login
+*   1.2 Login using the username, password and loginhash
+* 2. Get the upcoming exams
+*   2.1 Get the id and transid
+*   2.2 Calculate the start- and end-date
+*   2.3 Get the upcoming exams
+* 3. Send the exams to the webhook
+*   3.1 Parse the xml
+*   3.2 Generate and send the Embed to the webhook
+*/
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // This is the http client, it is important that it stores cookies to be able to login
     let client = reqwest::Client::builder().cookie_store(true).build()?;
 
+    // STEP 1.1: Get the loginhash
+    // Firstly go to the login-page
     let res = client
         .get("https://kss.nesa-sg.ch/loginto.php?pageid=21312")
         .send()
         .await?;
 
+    // Then get the html
     let body = res.text().await?;
 
+    // Lastly parse it using the soup library
     let soup = Soup::new(&body);
 
     let loginhash = soup
@@ -23,10 +42,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("value")
         .unwrap();
 
-    // Get menu href
+    // STEP 1.2: login using username and password
     let res = client
         .post("https://kss.nesa-sg.ch/index.php?pageid=21312")
         .body(format!(
+            // Note: The devs of the nesa-sg website are really inconsistent
+            // Some parts are in english and some in german
+            // I spent around 1h debugging why my requests wasn't working
+            // and the reason was, I was using passworD instead of passworT
             "login={}&passwort={}&loginhash={}",
             creds::creds::USERNAME,
             creds::creds::PASSWORD,
@@ -36,6 +59,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send()
         .await?;
 
+    // STEP 2.1: Get the id and transid
+    // We use the html from the last request to find the id and transid
     let body = res.text().await?;
 
     let soup = Soup::new(&body);
@@ -53,12 +78,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let trans_id: &str = href[3];
 
+    // STEP 2.2: Calculate the start and end date
     static WEEKS: i64 = 2;
 
     let now = chrono::Utc::now();
     let start_date = now - Duration::days(now.weekday().num_days_from_monday() as i64);
     let end_date = start_date + Duration::days(7 * WEEKS - 1);
 
+    // STEP 2.3: Make a request to get the upcoming exams
     let res = client
         .get("https://kss.nesa-sg.ch/scheduler_processor.php")
         .query(&[
@@ -94,9 +121,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send()
         .await?;
 
+    // Step 3.1: parse the received xml
     let body = res
         .text()
         .await?
+        // Note: minidom needs a xmlns (xml namespace) to work
         .replace("<data>", r#"<data xmlns="event">"#);
 
     let root: minidom::Element = body.parse().unwrap();
@@ -115,14 +144,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ]);
     }
 
+    // Sort the events by date because somehow the server doesn't send them sorted.. -.-
     events.sort_by(|a, b| a[0].cmp(&b[0]));
 
+    // STEP 3.2: Generate and send the embed
     let mut body = String::new();
 
+    // This generates the embed description
     for event in events {
         body.push_str(&format!("*{}* **{}** {} \\n", event[0], event[1], event[2]));
     }
 
+    // Send the embed
     let _ = client
         .patch(format!(
             "https://discord.com/api/webhooks/{}/{}/messages/{}",
@@ -131,6 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             creds::creds::MESSAGE_ID
         ))
         .header("Content-Type", "application/json")
+        // Note: this body part is really ugly to read, so if anyone has improvements then just make a pr
         .body(format!(
             "{}{}{}{}{}",
             r#"{ "embeds": [{ "title": "Upcoming exams:", "color": "16711680","description": ""#,
