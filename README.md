@@ -46,3 +46,6 @@ Now you're pretty much done and can run:
 ```rust
 cargo run --release
 ```
+
+## Contributing
+Feel free to contribute by simply making a pull request!
