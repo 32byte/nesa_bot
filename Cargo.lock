@@ -536,7 +536,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nesa_discord_bot"
+name = "nesa_bot"
 version = "0.1.0"
 dependencies = [
  "chrono",
