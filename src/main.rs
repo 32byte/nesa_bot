@@ -102,9 +102,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "min_date",
                 &format!(
                     "{}-{}-{}",
-                    start_date.year(),
-                    start_date.month(),
-                    start_date.day()
+                    now_ch.year(),
+                    now_ch.month(),
+                    now_ch.day()
                 ),
             ),
             (
@@ -159,6 +159,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         body.push_str(&format!("*{}* **{}** {} \\n", event[0], event[1], event[2]));
     }
 
+    if body.is_empty() {
+        body = format!("No exams scheduled for the next {} weeks! <:PogChamp:798127922556698624>", WEEKS);
+    }
+
     // Send the embed
     let _ = client
         .patch(format!(
@@ -171,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Note: this body part is really ugly to read, so if anyone has improvements then just make a pr
         .body(format!(
             "{}{}{}{}{}",
-            r#"{ "embeds": [{ "title": "Upcoming exams:", "color": "16711680","description": ""#,
+            r#"{ "content": "", "embeds": [{ "title": "Upcoming exams:", "color": "16711680","description": ""#,
             body,
             r#"","footer": {"text": "Last updated "#,
             format!(

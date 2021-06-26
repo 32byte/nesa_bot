@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             creds::creds::TOKEN
         ))
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body("content=Hello, I will be edited!")
+        .body("content=The upcoming exams will be displayed here:")
         .send()
         .await?;
 
