@@ -1,5 +1,8 @@
-use chrono::{Datelike, Duration, Timelike};
+use chrono::{Datelike, Duration, TimeZone, Timelike};
+use chrono_tz::Europe::Zurich;
 use soup::{prelude::*, QueryBuilderExt, Soup};
+
+#[path = "./creds.rs"]
 mod creds;
 
 /**
@@ -81,8 +84,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // STEP 2.2: Calculate the start and end date
     static WEEKS: i64 = 2;
 
-    let now = chrono::Utc::now();
-    let start_date = now - Duration::days(now.weekday().num_days_from_monday() as i64);
+    let naive = chrono::Local::now().naive_local();
+    let now_ch = Zurich.from_local_datetime(&naive).unwrap();
+    let start_date = now_ch - Duration::days(now_ch.weekday().num_days_from_monday() as i64);
     let end_date = start_date + Duration::days(7 * WEEKS - 1);
 
     // STEP 2.3: Make a request to get the upcoming exams
@@ -92,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ("view", "week"),
             (
                 "curr_date",
-                &format!("{}-{}-{}", now.year(), now.month(), now.day()),
+                &format!("{}-{}-{}", now_ch.year(), now_ch.month(), now_ch.day()),
             ),
             (
                 "min_date",
@@ -170,7 +174,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             r#"{ "embeds": [{ "title": "Upcoming exams:", "color": "16711680","description": ""#,
             body,
             r#"","footer": {"text": "Last updated "#,
-            format!("{:02}:{:02}:{:02}", now.hour(), now.minute(), now.second()),
+            format!(
+                "{:02}:{:02}:{:02}",
+                now_ch.hour(),
+                now_ch.minute(),
+                now_ch.second()
+            ),
             r#""}}]}"#
         ))
         .send()
